@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: kisaankajadoo-api
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGO_URI
+        sync: false # Set in dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: RZP_KEY
+        sync: false
+      - key: RZP_SECRET
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
