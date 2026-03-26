@@ -8,6 +8,7 @@ const VehicleSchema = new mongoose.Schema({
     required: true 
   },
   model: String,
+  description: String,
   ratePerHour: { type: Number, required: true },
   district: { type: String, required: true },
   location: {
@@ -15,6 +16,7 @@ const VehicleSchema = new mongoose.Schema({
     coordinates: [Number] // [lng, lat]
   },
   available: { type: Boolean, default: true },
+  isVerified: { type: Boolean, default: true },
   imageUrl: String,
   rating: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }

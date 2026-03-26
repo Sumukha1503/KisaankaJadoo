@@ -6,27 +6,88 @@ import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import { Package, TrendingUp, ArrowRight, Plus, Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useLocation as useLocationRouter } from 'react-router-dom';
+
+import { useLocation } from '../hooks/useLocation';
+
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 
 export default function VendorPage() {
   const { t } = useTranslation();
+  const { coords } = useLocation();
+  const locationRouter = useLocationRouter();
+  const voiceParams = locationRouter.state?.voiceParams;
+
   const { token, role } = useSelector((s) => s.auth);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showListForm, setShowListForm] = useState(false);
-  const [form, setForm] = useState({ cropName: '', quantity: '', pricePerKg: '', minNegotiable: '', location: '' });
+  const [showListForm, setShowListForm] = useState(voiceParams ? true : false);
+  const [form, setForm] = useState({ 
+    cropName: voiceParams?.cropName || '', 
+    quantity: voiceParams?.quantity || '', 
+    pricePerKg: voiceParams?.pricePerKg || '', 
+    minNegotiable: voiceParams?.minNegotiable || '', 
+    location: voiceParams?.location || '' 
+  });
 
   useEffect(() => {
-    axios.get(`${API}/api/vendors`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => setListings(r.data))
-      .catch(() => setListings([]))
-      .finally(() => setLoading(false));
+    if (voiceParams) {
+      setForm(f => ({ ...f, ...voiceParams }));
+      setShowListForm(true);
+    }
+  }, [voiceParams]);
+
+  const [trends, setTrends] = useState([]);
+  const [agreedPrices, setAgreedPrices] = useState([]);
+  const [voteForm, setVoteForm] = useState({ crop: 'Rice', price: '' });
+
+  const fetchAgreedPrices = () => {
+    axios.get(`${API}/api/vendors/agreed-price`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setAgreedPrices(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setAgreedPrices([]));
+  };
+
+  useEffect(() => {
+    axios.get(`${API}/api/vendors/price-trends`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setTrends(r.data))
+      .catch(() => setTrends([]));
+    fetchAgreedPrices();
   }, []);
 
-  const [biddingId, setBiddingId] = useState(null);
-  const [bidPrice, setBidPrice] = useState('');
+  const castVote = async () => {
+    if (!voteForm.price) return toast.error('Enter a price to vote');
+    try {
+      await axios.post(`${API}/api/vendors/price-vote`, { 
+        crop: voteForm.crop, 
+        votedPrice: parseFloat(voteForm.price),
+        district: coords?.district || 'Unknown'
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      
+      toast.success(`Vote cast for ${voteForm.crop} at ₹${voteForm.price}!`);
+      setVoteForm({ ...voteForm, price: '' });
+      fetchAgreedPrices();
+    } catch {
+      toast.error('Failed to cast vote');
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    const url = coords && coords.lat && coords.lng
+      ? `${API}/api/vendors?lat=${coords.lat}&lng=${coords.lng}`
+      : `${API}/api/vendors`;
+      
+    axios.get(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => setListings(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setListings([]))
+      .finally(() => setLoading(false));
+  }, [coords, token]);
+
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successData, setSuccessData] = useState(null);
 
   const makeBid = async (listing) => {
     const price = parseFloat(bidPrice);
@@ -38,6 +99,8 @@ export default function VendorPage() {
         offeredPrice: price 
       }, { headers: { Authorization: `Bearer ${token}` } });
       
+      setSuccessData({ title: 'Bid Placed!', sub: 'The farmer has been notified of your offer.', item: listing.crop || listing.cropName });
+      setShowSuccess(true);
       toast.success(t('bid_placed_success', { price: price, name: listing.cropName || listing.crop }));
       setBiddingId(null);
       setBidPrice('');
@@ -49,7 +112,13 @@ export default function VendorPage() {
   const submitListing = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API}/api/vendors/list`, form, { headers: { Authorization: `Bearer ${token}` } });
+      const payload = { 
+        ...form, 
+        location: coords ? { type: 'Point', coordinates: [coords.lng, coords.lat] } : undefined 
+      };
+      await axios.post(`${API}/api/vendors/list`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      setSuccessData({ title: 'Listing Live!', sub: 'Your crop is now visible to buyers.', item: form.cropName });
+      setShowSuccess(true);
       toast.success(t('listed_success'));
       setListings(l => [{ _id: Date.now().toString(), ...form, seller: 'You' }, ...l]);
       setShowListForm(false);
@@ -58,14 +127,130 @@ export default function VendorPage() {
     }
   };
 
+  const [biddingId, setBiddingId] = useState(null);
+  const [bidPrice, setBidPrice] = useState('');
+
   return (
     <Layout title={t('vendor_title')} subtitle={t('vendor_sub')}>
+      {/* Success Modal */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center shadow-2xl">
+            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-600">
+              <Package size={40} />
+            </div>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">{successData?.title || 'Action Confirmed!'}</h2>
+            <p className="text-gray-500 mb-6">{successData?.sub || 'Check your email for status updates.'}</p>
+            
+            <div className="bg-gray-50 rounded-2xl p-4 mb-6 text-left border border-gray-100">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Market Item</div>
+              <div className="font-bold text-gray-800 mb-3 capitalize">{successData?.item}</div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</div>
+              <div className="flex items-center gap-2 text-amber-600 font-bold">
+                <div className="w-2 h-2 rounded-full bg-amber-600 text-xs"></div> {t('confirmed', 'Live / Active')}
+              </div>
+            </div>
+
+            <button onClick={() => setShowSuccess(false)}
+              className="w-full bg-amber-600 text-white font-bold py-4 rounded-2xl hover:bg-amber-700 transition-all shadow-lg shadow-amber-500/20">
+              {t('done_btn', 'Great!')}
+            </button>
+          </motion.div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <div className="text-sm text-gray-500 font-medium">{t('active_listings', { count: listings.length })}</div>
         <button onClick={() => setShowListForm(!showListForm)} className="flex items-center gap-2 bg-green-600 text-white font-bold px-6 py-3 rounded-2xl hover:bg-green-700 transition-colors text-sm shadow-lg shadow-green-500/20">
           <Plus size={16} /> {t('list_crop_btn')}
         </button>
       </div>
+      {/* Community Price Voting Section */}
+      {role === 'FARMER' && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-green-600 to-emerald-700 rounded-[32px] p-8 text-white mb-8 shadow-xl shadow-green-500/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex-1">
+              <h3 className="text-xl font-black mb-2 flex items-center gap-2">
+                <TrendingUp size={24} /> Community Price Discovery
+              </h3>
+              <p className="text-green-50 text-sm opacity-90">Vote for the daily agreed price to protect fellow farmers from exploitation. Consensus builds power!</p>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-3 bg-white/10 p-4 rounded-[24px] backdrop-blur-md border border-white/10">
+              <select 
+                value={voteForm.crop} 
+                onChange={e => setVoteForm({...voteForm, crop: e.target.value})}
+                className="bg-white/20 border-none rounded-xl px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-white/50 text-white placeholder-green-100"
+              >
+                <option value="Rice" className="text-gray-900">Rice</option>
+                <option value="Wheat" className="text-gray-900">Wheat</option>
+                <option value="Tomato" className="text-gray-900">Tomato</option>
+                <option value="Potato" className="text-gray-900">Potato</option>
+              </select>
+              <div className="flex items-center gap-2 bg-white/20 rounded-xl px-4 py-2.5">
+                <span className="text-sm font-bold text-green-100">₹</span>
+                <input 
+                  type="number" 
+                  placeholder="Price/kg"
+                  value={voteForm.price}
+                  onChange={e => setVoteForm({...voteForm, price: e.target.value})}
+                  className="bg-transparent border-none p-0 text-sm font-bold focus:ring-0 placeholder-green-100 w-20"
+                />
+              </div>
+              <button 
+                onClick={castVote}
+                className="bg-white text-green-700 font-black px-6 py-2.5 rounded-xl hover:bg-green-50 transition-all text-sm whitespace-nowrap"
+              >
+                Cast Vote
+              </button>
+            </div>
+          </div>
+
+          {agreedPrices.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-8 border-t border-white/10">
+              {agreedPrices.map(ap => (
+                <div key={ap._id} className="bg-white/5 p-4 rounded-2xl">
+                  <div className="text-[10px] font-black uppercase text-green-100/60 mb-1">{ap._id}</div>
+                  <div className="text-lg font-black tracking-tight">₹{Math.round(ap.avgPrice)}<span className="text-[10px] lowercase text-green-100/60 ml-1">avg</span></div>
+                  <div className="text-[10px] mt-1 text-green-100/40 font-bold">{ap.voteCount} votes cast</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
+      {/* Agri-Pulse Price Trends */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100 mb-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-gray-900 leading-tight">Agri-Pulse: Market Price Trends</h3>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">7-Day Trajectory (₹ per Quintal)</p>
+          </div>
+          <div className="hidden md:flex gap-4">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500"><div className="w-2 h-2 rounded-full bg-green-500"></div> Wheat</div>
+            <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Rice</div>
+            <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Tomato</div>
+          </div>
+        </div>
+        <div className="h-[300px] w-full min-h-[300px]">
+          <ResponsiveContainer width="100%" height={300} minWidth={0}>
+            <LineChart data={trends} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 'bold' }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9CA3AF', fontWeight: 'bold' }} />
+              <Tooltip 
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)', padding: '12px' }}
+                itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+              />
+              <Line type="monotone" dataKey="wheat" stroke="#10B981" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="rice" stroke="#3B82F6" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="tomato" stroke="#F97316" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 6 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </motion.div>
 
       {/* Listing Form */}
       {showListForm && (

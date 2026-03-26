@@ -3,6 +3,8 @@ import { protect } from '../middleware/authMiddleware.js';
 import crypto from 'crypto';
 // Mock razorpay for hackathon purposes if credentials aren't passed
 import Razorpay from 'razorpay'; 
+import User from '../models/User.js';
+import { sendPaymentSuccessEmail } from '../utils/emailService.js';
 
 const router = Router();
 
@@ -36,6 +38,14 @@ router.post('/verify', protect, async (req, res) => {
     
     if (!process.env.RZP_SECRET) {
       // Mock validation success
+      const user = await User.findById(req.user.id);
+      if (user?.email) {
+        await sendPaymentSuccessEmail(user.email, {
+          amount: req.body.amount || '0',
+          paymentId: `MOCK-${Date.now()}`,
+          purpose: 'Order/Booking Payment'
+        });
+      }
       return res.json({ success: true, message: 'Mock validation successful' });
     }
 

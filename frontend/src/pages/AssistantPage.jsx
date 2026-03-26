@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
-import { Bot, Languages, MessageSquare, Mic, Send, Sparkles, Tractor, Volume2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Bot, Languages, MessageSquare, Mic, Send, Sparkles, Tractor, Volume2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -54,23 +54,86 @@ function getSpeechVoice(language) {
   );
 }
 
+function VoiceVisualizer({ state }) {
+  const isActive = state === 'listening' || state === 'speaking';
+  
+  return (
+    <div className="relative flex items-center justify-center w-32 h-32 mx-auto mb-8">
+      <AnimatePresence>
+        {isActive && [1, 2, 3].map((i) => (
+          <motion.div
+            key={i}
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 2, opacity: 0 }}
+            transition={{
+              duration: 2,
+              repeat: Infinity,
+              delay: i * 0.6,
+              ease: "easeOut"
+            }}
+            className="absolute inset-0 rounded-full border-2 border-emerald-400/30"
+          />
+        ))}
+      </AnimatePresence>
+
+      <motion.div
+        animate={{
+          scale: state === 'listening' ? [1, 1.15, 1] : state === 'speaking' ? [1, 1.08, 1] : 1,
+          boxShadow: state === 'listening' 
+            ? ["0 0 0px rgba(16, 185, 129, 0)", "0 0 40px rgba(16, 185, 129, 0.4)", "0 0 0px rgba(16, 185, 129, 0)"]
+            : ["0 0 0px rgba(255, 255, 255, 0)", "0 0 20px rgba(255, 255, 255, 0.2)", "0 0 0px rgba(255, 255, 255, 0)"]
+        }}
+        transition={{
+          duration: state === 'listening' ? 1.5 : 3,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+        className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center shadow-2xl transition-colors duration-500 ${
+          state === 'listening' 
+            ? 'bg-gradient-to-tr from-emerald-500 to-green-400 border-4 border-white/40' 
+            : state === 'speaking'
+            ? 'bg-gradient-to-tr from-sky-400 to-blue-500 border-4 border-white/40'
+            : 'bg-white/10 backdrop-blur-md border border-white/20'
+        }`}
+      >
+        <Sparkles size={32} className={state === 'idle' ? 'text-white/40' : 'text-white'} />
+      </motion.div>
+    </div>
+  );
+}
+
+function ThinkingDots() {
+  return (
+    <div className="flex gap-1 items-center px-1">
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          animate={{ y: [0, -4, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
+          className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function AssistantPage() {
-  const { token } = useSelector((state) => state.auth);
+  const { token, role } = useSelector((state) => state.auth);
   const [language, setLanguage] = useState('en-IN');
   const [messages, setMessages] = useState([{ role: 'assistant', content: GREETING['en-IN'] }]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceParams, setVoiceParams] = useState({});
   const navigate = useNavigate();
   const { isListening, startListening } = useVoice();
   const location = useLocation();
   const messagesEndRef = useRef(null);
+  const audioRef = useRef(null);
 
-  // Auto-start mic if redirected from top header
   useEffect(() => {
     if (location.state?.autoMic) {
       startVoiceInput();
-      // Clear state so it doesn't re-trigger on fresh
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -88,29 +151,38 @@ export default function AssistantPage() {
 
   useEffect(() => {
     if (!window.speechSynthesis) return undefined;
-
     const handleVoicesChanged = () => window.speechSynthesis.getVoices();
     window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
-
     return () => window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
   }, []);
 
-  const speakFallback = (text) => {
-    if (!window.speechSynthesis || !text) return;
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setIsSpeaking(false);
+  };
 
-    window.speechSynthesis.cancel();
+  const speakFallback = (text, autoListen = false) => {
+    if (!window.speechSynthesis || !text) return;
+    stopSpeaking();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = language;
     utterance.voice = getSpeechVoice(language);
     utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      if (autoListen) setTimeout(startVoiceInput, 300);
+    };
     utterance.onerror = () => setIsSpeaking(false);
     window.speechSynthesis.speak(utterance);
   };
 
-  const speakText = async (text) => {
+  const speakText = async (text, autoListen = false) => {
     if (!text) return;
-
     try {
       setIsSpeaking(true);
       const { data } = await axios.post(
@@ -120,21 +192,35 @@ export default function AssistantPage() {
       );
 
       if (data.audioBase64) {
+        stopSpeaking();
         const audio = new Audio(`data:${data.mimeType || 'audio/wav'};base64,${data.audioBase64}`);
-        audio.onended = () => setIsSpeaking(false);
-        audio.onerror = () => {
+        audioRef.current = audio;
+        audio.onended = () => {
           setIsSpeaking(false);
-          speakFallback(text);
+          audioRef.current = null;
+          if (autoListen) setTimeout(startVoiceInput, 300);
         };
-        await audio.play();
+        audio.onerror = (e) => {
+          console.error('Audio object error:', e);
+          setIsSpeaking(false);
+          audioRef.current = null;
+          speakFallback(text, autoListen);
+        };
+        try {
+          await audio.play();
+        } catch (playError) {
+          console.error('Audio play failed:', playError);
+          setIsSpeaking(false);
+          speakFallback(text, autoListen);
+        }
         return;
       }
 
       setIsSpeaking(false);
-      speakFallback(data.text || text);
+      speakFallback(data.text || text, autoListen);
     } catch (error) {
       setIsSpeaking(false);
-      speakFallback(text);
+      speakFallback(text, autoListen);
     }
   };
 
@@ -153,19 +239,30 @@ export default function AssistantPage() {
         {
           message: cleanMessage,
           language,
-          history: nextMessages.slice(-8)
+          role,
+          history: nextMessages.slice(-8),
+          currentParams: voiceParams
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      if (data.params) {
+        setVoiceParams((prev) => ({ ...prev, ...data.params }));
+      }
+
       setMessages((current) => [...current, { role: 'assistant', content: data.reply }]);
-      speakText(data.reply);
+      
+      const isQuestion = !data.action?.route;
+      speakText(data.reply, isQuestion);
 
       if (data.action?.route) {
         toast.success(data.action.label || 'Opening the suggested tool');
-        setTimeout(() => navigate(data.action.route), 1200);
+        const finalParams = { ...voiceParams, ...data.params };
+        setTimeout(() => navigate(data.action.route, { state: { voiceParams: finalParams } }), 1200);
+        setVoiceParams({});
       }
     } catch (error) {
+      console.error('Chat error:', error);
       const reply =
         language === 'hi-IN'
           ? 'अभी सहायक से जवाब नहीं मिल पाया। थोड़ी देर में फिर से कोशिश करें।'
@@ -196,143 +293,155 @@ export default function AssistantPage() {
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <section className="space-y-6">
           <div className="rounded-[32px] border border-emerald-200 bg-gradient-to-br from-emerald-600 via-green-600 to-lime-500 p-6 text-white shadow-xl shadow-emerald-500/20">
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20">
-              <Bot size={24} />
+            <VoiceVisualizer state={isListening ? 'listening' : isSpeaking ? 'speaking' : 'idle'} />
+            
+            <div className="text-center mb-8">
+              <h3 className="text-2xl font-bold mb-2">
+                {isListening ? 'Listening...' : isSpeaking ? 'Speaking...' : 'Agri-Voice Advisor'}
+              </h3>
+              <p className="text-emerald-50/80 text-sm">
+                Your direct AI connection for smarter farming.
+              </p>
             </div>
-            <h2 className="text-2xl font-black leading-tight">Sarvam AI Farmer Assistant</h2>
-            <p className="mt-3 text-sm text-emerald-50">
-              Farmers can talk naturally, hear spoken responses, and jump to the right farm tool without hunting through menus.
-            </p>
 
-            <div className="mt-6 space-y-3">
-              {LANGUAGE_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setLanguage(option.id)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
-                    language === option.id
-                      ? 'border-white bg-white text-emerald-700 shadow-lg'
-                      : 'border-white/25 bg-white/10 text-white hover:bg-white/15'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-black">{option.label}</span>
-                    <Languages size={16} />
-                  </div>
-                  <p className={`mt-1 text-xs ${language === option.id ? 'text-emerald-700/80' : 'text-emerald-50'}`}>
-                    {option.hint}
-                  </p>
-                </button>
-              ))}
+            <div className="flex gap-3">
+              <button
+                onClick={isListening || isSpeaking ? stopSpeaking : startVoiceInput}
+                className={`flex-1 h-14 rounded-2xl flex items-center justify-center gap-3 font-semibold transition-all shadow-lg ${
+                  isListening || isSpeaking
+                    ? 'bg-white/20 border-2 border-white/40 hover:bg-white/30 text-white'
+                    : 'bg-white text-emerald-600 hover:bg-emerald-50'
+                }`}
+              >
+                {isListening || isSpeaking ? (
+                  <>
+                    <X size={24} />
+                    Stop
+                  </>
+                ) : (
+                  <>
+                    <Mic size={24} />
+                    Start Talking
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-gray-200 bg-white p-6 shadow-clay-card">
-            <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-amber-100 p-3 text-amber-600">
-                <Tractor size={20} />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-gray-900">Quick help for farmers</h3>
-                <p className="text-sm text-gray-500">Tap a common request to start faster.</p>
-              </div>
+          <div className="bg-white rounded-[32px] border border-emerald-100 p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4 text-emerald-800 font-semibold">
+              <Languages size={20} className="text-emerald-500" />
+              Change Language
             </div>
-
-            <div className="mt-5 space-y-3">
-              {quickActions.map((prompt) => (
+            <div className="space-y-2">
+              {LANGUAGE_OPTIONS.map((opt) => (
                 <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => submitMessage(prompt)}
-                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-green-300 hover:bg-green-50 hover:text-green-700"
+                  key={opt.id}
+                  onClick={() => setLanguage(opt.id)}
+                  className={`w-full p-4 rounded-2xl text-left transition-all border-2 ${
+                    language === opt.id
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900 shadow-sm'
+                      : 'border-transparent hover:bg-gray-50 text-gray-600'
+                  }`}
                 >
-                  {prompt}
+                  <div className="font-bold">{opt.label}</div>
+                  <div className="text-xs opacity-70 mt-0.5">{opt.hint}</div>
                 </button>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-[36px] border border-gray-200 bg-white shadow-clay-card">
-          <div className="border-b border-gray-100 bg-gradient-to-r from-sky-50 via-white to-emerald-50 px-6 py-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="flex flex-col h-[600px] xl:h-[700px] bg-white rounded-[32px] border border-emerald-100 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                <Bot size={24} />
+              </div>
               <div>
-                <h2 className="text-xl font-black text-gray-900">Voice + Chat Support</h2>
-                <p className="text-sm text-gray-500">
-                  Ask doubts, get guided answers, and hear them back in your language.
-                </p>
+                <div className="font-bold text-gray-900">Virtual Agri-Consultant</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs text-emerald-600 font-medium uppercase tracking-wider">Online</span>
+                </div>
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={startVoiceInput}
-                  className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                    isListening
-                      ? 'bg-red-100 text-red-600'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <Mic size={16} /> {isListening ? 'Listening...' : 'Speak'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => speakText(messages[messages.length - 1]?.content)}
-                  disabled={isSpeaking || !messages.length}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-700 transition hover:border-green-300 hover:text-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Volume2 size={16} /> {isSpeaking ? 'Speaking...' : 'Play answer'}
-                </button>
-              </div>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setMessages([{ role: 'assistant', content: GREETING[language] }])}
+                className="p-2 hover:bg-white rounded-xl text-gray-400 hover:text-emerald-500 transition-colors border border-transparent hover:border-emerald-100"
+              >
+                <MessageSquare size={20} />
+              </button>
             </div>
           </div>
 
-          <div className="flex-1 space-y-4 overflow-y-auto bg-[#f7faf8] px-4 py-5 md:px-6">
-            {messages.map((message, index) => (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
+            {messages.map((msg, idx) => (
               <motion.div
-                key={`${message.role}-${index}`}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`max-w-3xl rounded-[28px] px-5 py-4 shadow-sm ${
-                  message.role === 'assistant'
-                    ? 'mr-auto border border-emerald-100 bg-white text-gray-800'
-                    : 'ml-auto bg-gray-900 text-white'
-                }`}
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                key={idx}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] opacity-70">
-                  {message.role === 'assistant' ? <Sparkles size={14} /> : <MessageSquare size={14} />}
-                  {message.role === 'assistant' ? 'Assistant' : 'You'}
+                <div
+                  className={`max-w-[85%] rounded-[24px] px-5 py-4 shadow-sm ${
+                    msg.role === 'user'
+                      ? 'bg-emerald-600 text-white rounded-br-none'
+                      : 'bg-gray-50 text-gray-800 rounded-bl-none border border-gray-100'
+                  }`}
+                >
+                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                 </div>
-                <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
               </motion.div>
             ))}
-
             {isLoading && (
-              <div className="max-w-sm rounded-[28px] border border-emerald-100 bg-white px-5 py-4 text-sm text-gray-500 shadow-sm">
-                Preparing a farmer-friendly answer...
-              </div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex justify-start"
+              >
+                <div className="bg-gray-50 border border-gray-100 rounded-[20px] rounded-bl-none px-4 py-3">
+                  <ThinkingDots />
+                </div>
+              </motion.div>
             )}
-
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="border-t border-gray-100 bg-white p-4 md:p-5">
-            <div className="flex items-end gap-3">
-              <textarea
+          <div className="p-4 bg-gray-50/50 border-t border-gray-100">
+            {messages.length < 3 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {quickActions.map((action, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setInput(action);
+                      submitMessage(action);
+                    }}
+                    className="px-4 py-2 bg-white border border-emerald-100 rounded-full text-sm text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 transition-all font-medium shadow-sm"
+                  >
+                    {action}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <input
+                type="text"
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
-                rows={3}
-                placeholder="Type your farming question or tap Speak to ask by voice."
-                className="min-h-[88px] flex-1 resize-none rounded-[24px] border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-green-400 focus:bg-white"
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && submitMessage(input)}
+                placeholder="Type your question here..."
+                className="flex-1 h-14 bg-white border border-gray-200 rounded-2xl px-6 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-inner"
               />
               <button
-                type="button"
                 onClick={() => submitMessage(input)}
                 disabled={isLoading || !input.trim()}
-                className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-green-600 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg active:scale-95"
               >
-                <Send size={18} />
+                <Send size={24} />
               </button>
             </div>
           </div>

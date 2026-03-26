@@ -26,6 +26,7 @@ const OrderSchema = new mongoose.Schema({
     district: String,
     pinCode: String
   },
+  trackingId: { type: String, unique: true },
   createdAt: { type: Date, default: Date.now }
 });
 

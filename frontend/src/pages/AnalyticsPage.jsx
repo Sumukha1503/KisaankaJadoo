@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useSelector } from 'react-redux';
 import Layout from '../components/Layout';
-import { Loader } from 'lucide-react';
+import { Loader, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -35,6 +37,18 @@ export default function AnalyticsPage() {
 
   const { role } = useSelector((s) => s.auth);
 
+  const exportPDF = async () => {
+    const element = document.getElementById('analytics-content');
+    const canvas = await html2canvas(element, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`KisaanKaJadoo_Analytics_${role}.pdf`);
+  };
+
   const statCards = [
     { label: t('stat_total_users'), value: data.stats.totalUsers?.toLocaleString('en-IN'), icon: '👥', change: '+12%', color: 'green' },
     { label: t('stat_active_listings'), value: data.stats.activeListings, icon: '📋', change: '+5%', color: 'blue' },
@@ -49,11 +63,25 @@ export default function AnalyticsPage() {
   ] : [];
 
   return (
-    <Layout title={t('analytics_title')} subtitle={t('analytics_sub')}>
+    <Layout 
+      title={data.title || t('analytics_title')} 
+      subtitle={t('analytics_sub')}
+      action={
+        <button 
+          onClick={exportPDF}
+          className="flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-2xl font-black text-sm shadow-xl hover:bg-gray-800 transition-all"
+        >
+          <Download size={16} /> Export PDF
+        </button>
+      }
+    >
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-400"><Loader size={24} className="animate-spin mr-3" />{t('loading_analytics')}</div>
+        <div className="flex items-center justify-center py-20 text-gray-400">
+          <Loader size={24} className="animate-spin mr-3" />
+          {t('loading_analytics')}
+        </div>
       ) : (
-        <div className="space-y-8">
+        <div id="analytics-content" className="space-y-8 p-1">
           {/* Stat Cards */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {statCards.map(({ label, value, icon, change }) => (
@@ -94,52 +122,58 @@ export default function AnalyticsPage() {
 
           {/* Charts Row 1 */}
           <div className="grid lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100">
+            <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100 flex flex-col min-h-[350px]">
               <h3 className="font-black text-gray-900 text-lg mb-6">{t('chart_yield_title')}</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={data.yieldTrend}>
-                  <defs>
-                    <linearGradient id="yieldGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#16a34a" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                  <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="yield" stroke="#16a34a" strokeWidth={2.5} fill="url(#yieldGrad)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="flex-grow w-full h-full min-h-[220px]" style={{ minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height={220} minWidth={0}>
+                  <AreaChart data={data.yieldTrend}>
+                    <defs>
+                      <linearGradient id="yieldGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#16a34a" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                    <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                    <Tooltip />
+                    <Area type="monotone" dataKey="yield" stroke="#16a34a" strokeWidth={2.5} fill="url(#yieldGrad)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100">
+            <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100 flex flex-col min-h-[350px]">
               <h3 className="font-black text-gray-900 text-lg mb-6">{t('chart_labour_title')}</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.labourUsage}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                  <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} />
-                  <Tooltip />
-                  <Bar dataKey="bookings" fill="#16a34a" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="flex-grow w-full h-full min-h-[220px]" style={{ minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height={220} minWidth={0}>
+                  <BarChart data={data.labourUsage}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                    <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                    <Tooltip />
+                    <Bar dataKey="bookings" fill="#16a34a" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
           {/* Charts Row 2 */}
           <div className="grid lg:grid-cols-3 gap-6">
-            <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100">
+            <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100 flex flex-col min-h-[350px]">
               <h3 className="font-black text-gray-900 text-lg mb-6">{t('chart_module_title')}</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={data.moduleBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-                    {data.moduleBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex-grow w-full h-full min-h-[200px]" style={{ minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height={200} minWidth={0}>
+                  <PieChart>
+                    <Pie data={data.moduleBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+                      {data.moduleBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             <div className="lg:col-span-2 bg-gradient-to-br from-green-600 to-emerald-700 rounded-[32px] p-8 text-white shadow-xl shadow-green-500/20">

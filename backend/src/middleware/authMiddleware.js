@@ -5,7 +5,8 @@ export const protect = (req, res, next) => {
   if (token && token.startsWith('Bearer')) {
     try {
       token = token.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
+      const secret = process.env.JWT_SECRET || 'secret123';
+      const decoded = jwt.verify(token, secret);
       req.user = decoded; // { id, role }
       next();
     } catch (error) {
@@ -14,6 +15,18 @@ export const protect = (req, res, next) => {
   } else {
     res.status(401).json({ error: 'Not authorized, no token' });
   }
+};
+
+export const optionalProtect = (req, res, next) => {
+  let token = req.headers.authorization;
+  if (token && token.startsWith('Bearer')) {
+    try {
+      token = token.split(' ')[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
+      req.user = decoded;
+    } catch (e) {}
+  }
+  next();
 };
 
 export const authorize = (...roles) => {

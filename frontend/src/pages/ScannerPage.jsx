@@ -132,7 +132,7 @@ export default function ScannerPage() {
           {chartData.length > 0 && (
             <div className="bg-white rounded-[32px] p-8 shadow-xl shadow-gray-100/50 border border-gray-100">
               <h2 className="text-xl font-black text-gray-900 mb-6">{t('confidence_trend')}</h2>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={200} minWidth={0}>
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#9ca3af' }} />

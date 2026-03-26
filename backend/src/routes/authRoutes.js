@@ -2,79 +2,104 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { sendWelcomeEmail, sendSecurityAlert, sendOTP, sendPasswordReset } from '../utils/emailService.js';
 
 const router = Router();
 
-// Mock OTP and Register/Login
+// Register
 router.post('/register', async (req, res) => {
   try {
-    const { name, phone, email, password, role } = req.body;
+    const { name, email, password, role, district, phone } = req.body;
+    const sanitizedEmail = email?.trim().toLowerCase();
     
-    // Sanitize unique fields: treat empty strings as undefined for sparse index
-    const sanitizedPhone = phone?.trim() || undefined;
-    const sanitizedEmail = email?.trim() || undefined;
-
-    const query = [];
-    if (sanitizedPhone) query.push({ phone: sanitizedPhone });
-    if (sanitizedEmail) query.push({ email: sanitizedEmail });
-
-    if (query.length > 0) {
-      const userExists = await User.findOne({ $or: query });
-      if (userExists) {
-        return res.status(400).json({ error: 'User with this email or phone already exists' });
-      }
-    }
+    const userExists = await User.findOne({ email: sanitizedEmail });
+    if (userExists) return res.status(400).json({ error: 'User already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ 
-      name: name?.trim(), 
-      phone: sanitizedPhone, 
+      name, 
       email: sanitizedEmail, 
       password: hashedPassword, 
-      role 
+      role, 
+      district, 
+      phone 
     });
-    
     await user.save();
+    
+    if (sanitizedEmail) {
+      const mockOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      sendOTP(sanitizedEmail, mockOtp).catch(err => console.error('[AUTH] OTP email failed:', err.message));
+      sendWelcomeEmail(sanitizedEmail, user.name).catch(err => console.error('[AUTH] Welcome email failed:', err.message));
+    }
 
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'secret123', { expiresIn: '24h' });
     res.status(201).json({ token, user: { id: user._id, name: user.name, role: user.role } });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ error: 'User with this email or phone already exists' });
-    }
     console.error('Register Error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
+// Login
 router.post('/login', async (req, res) => {
   try {
-    const { email, phone, password } = req.body;
-    console.log('Login attempt:', { email, phone, hasPassword: !!password });
+    const { email, password } = req.body;
+    const user = await User.findOne({ email: email?.trim().toLowerCase() });
     
-    const identifier = email || phone;
-    if (!identifier) return res.status(400).json({ error: 'Email or phone required' });
-
-    const user = await User.findOne({ 
-      $or: [{ email: identifier }, { phone: identifier }] 
-    });
-    
-    if (!user) {
-      console.log('User not found for identifier:', identifier);
-      return res.status(400).json({ error: 'Account not found. Please register.' });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      console.log('Password mismatch for user:', identifier);
-      return res.status(400).json({ error: 'Incorrect password. Try again.' });
+    const secret = process.env.JWT_SECRET || 'secret123';
+    const token = jwt.sign({ id: user._id, role: user.role }, secret, { expiresIn: '24h' });
+    
+    if (user.email) {
+      sendSecurityAlert(user.email, { 
+        device: 'Chrome on Mac', 
+        location: 'In-App session' 
+      }).catch(e => console.error('Security alert failed:', e.message));
     }
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'secret123', { expiresIn: '24h' });
     res.json({ token, user: { id: user._id, name: user.name, role: user.role } });
   } catch (error) {
     console.error('Login Error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Forgot Password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email: email?.trim().toLowerCase() });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const resetToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret123', { expiresIn: '1h' });
+    const resetLink = `${process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    
+    await sendPasswordReset(user.email, resetLink);
+    res.json({ message: 'Reset email sent' });
+  } catch (err) {
+    console.error('Forgot PW Error:', err);
+    res.status(500).json({ error: 'Failed to send reset email' });
+  }
+});
+
+// Reset Password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret123');
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Reset PW Error:', err);
+    res.status(400).json({ error: 'Invalid or expired token' });
   }
 });
 

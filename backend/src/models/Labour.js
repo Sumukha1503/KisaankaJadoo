@@ -15,7 +15,8 @@ const LabourSchema = new mongoose.Schema({
   district: { type: String, required: true },
   availability: [{ type: Date }],
   jobsCompleted: { type: Number, default: 0 },
-  verified: { type: Boolean, default: false }
+  verified: { type: Boolean, default: true },
+  isReady: { type: Boolean, default: false }
 });
 
 LabourSchema.index({ location: '2dsphere' });

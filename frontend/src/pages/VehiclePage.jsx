@@ -1,38 +1,73 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation as useLocationRouter, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import { MapPin, Truck, ArrowRight, Loader, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useLocation } from '../hooks/useLocation';
+
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 export default function VehiclePage() {
   const { t } = useTranslation();
+  const { coords } = useLocation();
+  const locationRouter = useLocationRouter();
+  const voiceParams = locationRouter.state?.voiceParams;
   const { token } = useSelector((s) => s.auth);
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('type_all');
+  const [filter, setFilter] = useState(voiceParams?.type ? `type_${voiceParams.type.toLowerCase()}` : 'type_all');
 
   useEffect(() => {
-    axios.get(`${API}/api/vehicles`, { headers: { Authorization: `Bearer ${token}` } })
+    setLoading(true);
+    const url = coords && coords.lat && coords.lng 
+      ? `${API}/api/vehicles?lat=${coords.lat}&lng=${coords.lng}`
+      : `${API}/api/vehicles`;
+      
+    axios.get(url, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => setVehicles(r.data))
       .catch(() => setVehicles([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [coords, token]);
 
   const types = ['type_all', 'type_tractor', 'type_harvester', 'type_tanker', 'type_equipment'];
   const filtered = filter === 'type_all' ? vehicles : vehicles.filter(v => `type_${v.type?.toLowerCase()}` === filter);
 
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [bookedVehicle, setBookedVehicle] = useState(null);
+
   const book = async (v) => {
     try {
-      await axios.post(`${API}/api/vehicles/book`, { vehicleId: v._id, rentalDays: 1 }, { headers: { Authorization: `Bearer ${token}` } });
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setDate(startDate.getDate() + 1);
+      const hours = 24;
+      const rate = v.ratePerHour || v.pricePerDay || 1000;
+      const totalAmount = rate * (v.ratePerHour ? hours : 1);
+      const depositAmount = Math.floor(totalAmount * 0.2);
+
+      await axios.post(`${API}/api/vehicles/book`, { 
+        vehicleId: v._id, 
+        startDate, 
+        endDate, 
+        hours, 
+        totalAmount, 
+        depositAmount 
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      
+      setBookedVehicle(v);
+      setShowSuccess(true);
       toast.success(t('vehicle_booked', { name: v.name }));
-    } catch {
-      toast.success(t('booking_sent', { name: v.name }));
+      
+      // Update local state to hide the rented vehicle
+      setVehicles(prev => prev.filter(item => item._id !== v._id));
+    } catch (err) {
+      console.error('Booking failed:', err);
+      toast.error(t('booking_failed') || 'Failed to send booking request');
     }
   };
 
@@ -93,6 +128,32 @@ export default function VehiclePage() {
               </div>
             </motion.div>
           ))}
+        </div>
+      )}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center shadow-2xl">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-10 h-10"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h2 className="text-2xl font-black text-gray-900 mb-2">{t('booking_confirmed', 'Booking Confirmed!') || 'Confirmed!'}</h2>
+            <p className="text-gray-500 mb-6">{t('booking_confirmed_sub', 'Check your email for details and tracking info.') || 'A confirmation email has been sent.'}</p>
+            
+            <div className="bg-gray-50 rounded-2xl p-4 mb-6 text-left border border-gray-100">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{t('booked_item', 'Item')}</div>
+              <div className="font-bold text-gray-800 mb-3">{bookedVehicle?.name}</div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{t('status', 'Status')}</div>
+              <div className="flex items-center gap-2 text-green-600 font-bold">
+                <div className="w-2 h-2 rounded-full bg-green-600"></div> {t('confirmed', 'Confirmed')}
+              </div>
+            </div>
+
+            <button onClick={() => setShowSuccess(false)}
+              className="w-full bg-green-600 text-white font-bold py-4 rounded-2xl hover:bg-green-700 transition-all shadow-lg shadow-green-500/20">
+              {t('done_btn', 'Awesome!')}
+            </button>
+          </motion.div>
         </div>
       )}
     </Layout>

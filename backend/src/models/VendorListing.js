@@ -13,8 +13,15 @@ const VendorListingSchema = new mongoose.Schema({
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
     date: { type: Date, default: Date.now }
   }],
+  location: {
+    type: { type: String, default: 'Point' },
+    coordinates: [Number] // [lng, lat]
+  },
   imageUrl: { type: String },
+  isVerified: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now }
 });
+
+VendorListingSchema.index({ location: '2dsphere' });
 
 export default mongoose.model('VendorListing', VendorListingSchema);

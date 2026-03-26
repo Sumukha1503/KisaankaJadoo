@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useSelector } from 'react-redux';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
-import { CloudSun, Sprout, TrendingUp, ArrowRight, Loader, MapPin } from 'lucide-react';
+import { CloudSun, Sprout, TrendingUp, ArrowRight, Loader, MapPin, AlertCircle, AlertTriangle, Thermometer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -17,6 +17,21 @@ export default function FarmWizardPage() {
   const [form, setForm] = useState({ crop: 'wheat', acreage: '', soil: 'loamy', city: 'Delhi' });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [weatherAlert, setWeatherAlert] = useState(null);
+
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        const { data } = await axios.get(`${API}/api/weather/alerts?city=${form.city}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setWeatherAlert(data);
+      } catch (e) {
+        console.warn('Failed to fetch weather alerts');
+      }
+    };
+    fetchWeather();
+  }, [form.city]);
 
   const handle = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -35,6 +50,43 @@ export default function FarmWizardPage() {
 
   return (
     <Layout title={t('wizard_title')} subtitle={t('wizard_sub')}>
+      {/* Weather Smart Alert */}
+      <AnimatePresence>
+        {weatherAlert?.alert && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className={`mb-8 overflow-hidden rounded-[28px] border p-5 flex items-center justify-between gap-4 shadow-lg ${
+              weatherAlert.alert.level === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+              weatherAlert.alert.level === 'caution' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+              'bg-blue-50 border-blue-200 text-blue-800'
+            }`}
+          >
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-2xl ${
+                weatherAlert.alert.level === 'warning' ? 'bg-amber-500' :
+                weatherAlert.alert.level === 'caution' ? 'bg-orange-500' :
+                'bg-blue-500'
+              } text-white`}>
+                {weatherAlert.alert.icon === 'cloud-rain' && <AlertTriangle size={20} />}
+                {weatherAlert.alert.icon === 'thermometer' && <Thermometer size={20} />}
+                {weatherAlert.alert.icon === 'sun' && <CloudSun size={20} />}
+                {weatherAlert.alert.icon === 'wind' && <AlertCircle size={20} />}
+              </div>
+              <div>
+                <h4 className="font-black text-sm uppercase tracking-wider mb-0.5">Smart Farming Alert</h4>
+                <p className="text-sm font-semibold opacity-90">{weatherAlert.alert.message}</p>
+              </div>
+            </div>
+            <div className="hidden md:block text-right">
+              <div className="text-xl font-black">{weatherAlert.temp}°C</div>
+              <div className="text-[10px] font-bold uppercase opacity-60 tracking-widest">{weatherAlert.condition}</div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Progress Tracker */}
       <div className="flex items-center gap-4 mb-10">
         {STEPS.map((s, i) => (

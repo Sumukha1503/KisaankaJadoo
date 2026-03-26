@@ -3,6 +3,8 @@ import axios from 'axios';
 import { protect } from '../middleware/authMiddleware.js';
 
 import FarmAnalysis from '../models/FarmAnalysis.js';
+import User from '../models/User.js';
+import { sendFarmAnalysisEmail } from '../utils/emailService.js';
 
 const router = Router();
 
@@ -70,6 +72,24 @@ router.post('/analyze', protect, async (req, res) => {
       recommendations: result.recommendations
     });
     await analysis.save();
+    
+    // Send Analysis Email to Farmer
+    try {
+      const user = await User.findById(req.user.id);
+      if (user?.email) {
+        console.log(`[FARM] Sending analysis email to: ${user.email}`);
+        await sendFarmAnalysisEmail(user.email, {
+          crop,
+          city,
+          estimatedYield: result.estimatedYield,
+          marketValue: result.marketValue,
+          weather: { temp, condition },
+          recommendations: result.recommendations
+        });
+      }
+    } catch (emailErr) {
+      console.error('[FARM] Email notification failed:', emailErr.message);
+    }
 
     res.json({
       ...result,

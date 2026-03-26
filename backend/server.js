@@ -15,6 +15,8 @@ import aiRoutes from './src/routes/aiRoutes.js';
 import vehicleRoutes from './src/routes/vehicleRoutes.js';
 import vendorRoutes from './src/routes/vendorRoutes.js';
 import analyticsRoutes from './src/routes/analyticsRoutes.js';
+import weatherRoutes from './src/routes/weatherRoutes.js';
+import adminRoutes from './src/routes/adminRoutes.js';
 
 const app = express();
 
@@ -35,6 +37,8 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/weather', weatherRoutes);
+app.use('/api/admin', adminRoutes);
 
 const PORT = process.env.PORT || 5001;
 

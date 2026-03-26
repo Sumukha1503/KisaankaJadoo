@@ -13,17 +13,18 @@ import { useVoice } from '../hooks/useVoice';
 
 const getNavLinks = (t, role) => {
   const allLinks = [
-    { to: '/farm-wizard', icon: LayoutDashboard, label: t('nav.wizard'), emoji: '🌾', roles: ['FARMER', 'ADMIN'] },
-    { to: '/scanner', icon: Scan, label: t('nav.scanner'), emoji: '🤖', roles: ['FARMER', 'ADMIN'] },
-    { to: '/shop', icon: ShoppingCart, label: t('nav.shop'), emoji: '🛒', roles: ['FARMER', 'ADMIN'] },
-    { to: '/labour', icon: Users, label: t('nav.labour'), emoji: '👷', roles: ['FARMER', 'LABOUR', 'ADMIN'] },
-    { to: '/vehicles', icon: Truck, label: t('nav.vehicles'), emoji: '🚜', roles: ['FARMER', 'VEHICLE_OWNER', 'ADMIN'] },
-    { to: '/vendors', icon: Tractor, label: t('nav.vendors'), emoji: '🏪', roles: ['FARMER', 'STORE_OWNER', 'VENDOR', 'ADMIN'] },
-    { to: '/assistant', icon: Bot, label: t('nav.assistant', 'AI Sahayak'), emoji: '🗣️', roles: ['FARMER', 'ADMIN', 'LABOUR'] },
+    { to: '/farm-wizard', icon: LayoutDashboard, label: t('nav.wizard'), emoji: '🌾', roles: ['FARMER'] },
+    { to: '/scanner', icon: Scan, label: t('nav.scanner'), emoji: '🤖', roles: ['FARMER'] },
+    { to: '/shop', icon: ShoppingCart, label: t('nav.shop'), emoji: '🛒', roles: ['FARMER'] },
+    { to: '/admin', icon: Shield, label: t('nav.admin', 'Admin Dashboard'), emoji: '👑', roles: ['ADMIN'] },
+    { to: role === 'ADMIN' ? '/manage?category=LABOUR' : '/labour', icon: Users, label: t('nav.labour'), emoji: '👷', roles: ['FARMER', 'LABOUR', 'ADMIN'] },
+    { to: role === 'ADMIN' ? '/manage?category=VEHICLE_OWNER' : '/vehicles', icon: Truck, label: t('nav.vehicles'), emoji: '🚜', roles: ['FARMER', 'VEHICLE_OWNER', 'ADMIN'] },
+    { to: role === 'ADMIN' ? '/manage?category=STORE_OWNER' : '/vendors', icon: Tractor, label: t('nav.vendors'), emoji: '🏪', roles: ['FARMER', 'STORE_OWNER', 'VENDOR', 'ADMIN'] },
+    { to: '/assistant', icon: Bot, label: t('nav.assistant', 'AI Sahayak'), emoji: '🗣️', roles: ['FARMER', 'ADMIN', 'LABOUR', 'STORE_OWNER', 'VENDOR', 'VEHICLE_OWNER'] },
     { to: '/welfare', icon: HeartPulse, label: t('nav.welfare', 'Welfare Hub'), emoji: '🏥', roles: ['FARMER', 'ADMIN', 'LABOUR'] },
-    { to: '/manage', icon: Shield, label: t('nav.manage', 'My Business'), emoji: '🛡️', roles: ['FARMER', 'STORE_OWNER', 'VEHICLE_OWNER', 'VENDOR', 'ADMIN', 'LABOUR'] },
+    { to: '/manage', icon: Shield, label: t('nav.manage', 'My Business'), emoji: '🛡️', roles: ['FARMER', 'STORE_OWNER', 'VEHICLE_OWNER', 'VENDOR', 'LABOUR'] },
     { to: '/profile', icon: User, label: t('nav.profile', 'Profile'), emoji: '👤', roles: ['FARMER', 'STORE_OWNER', 'VEHICLE_OWNER', 'VENDOR', 'ADMIN', 'LABOUR'] },
-    { to: '/analytics', icon: TrendingUp, label: t('nav.analytics'), emoji: '📊', roles: ['FARMER', 'ADMIN'] },
+    { to: '/analytics', icon: TrendingUp, label: t('nav.analytics'), emoji: '📊', roles: ['FARMER', 'ADMIN', 'LABOUR', 'STORE_OWNER', 'VENDOR', 'VEHICLE_OWNER'] },
     { to: '/knowledge', icon: BookOpen, label: t('nav.knowledge'), emoji: '📚', roles: ['FARMER', 'ADMIN'] },
   ];
 
@@ -132,17 +133,21 @@ export default function Layout({ children, title, subtitle }) {
 
   const voiceLanguage = i18n.language === 'hi' ? 'hi-IN' : i18n.language === 'kn' ? 'kn-IN' : 'en-IN';
 
+  const { role } = useSelector(s => s.auth);
   const handleVoiceCommand = (text) => {
     const cmd = text.toLowerCase();
-    if (['shop', 'store', 'buy', 'दुकान', 'खरीद', 'ಅಂಗಡಿ', 'ಖರೀದಿ'].some((keyword) => cmd.includes(keyword))) navigate('/shop');
-    else if (['wizard', 'guide', 'plan', 'योजना', 'सलाह', 'ಮಾರ್ಗದರ್ಶನ', 'ಯೋಜನೆ'].some((keyword) => cmd.includes(keyword))) navigate('/farm-wizard');
-    else if (['scanner', 'disease', 'check', 'बीमारी', 'रोग', 'ಸ್ಕ್ಯಾನರ್', 'ರೋಗ'].some((keyword) => cmd.includes(keyword))) navigate('/scanner');
-    else if (['labour', 'worker', 'मजदूर', 'कामगार', 'ಕಾರ್ಮಿಕ', 'ಕೆಲಸಗಾರ'].some((keyword) => cmd.includes(keyword))) navigate('/labour');
-    else if (['vehicle', 'tractor', 'वाहन', 'ट्रैक्टर', 'ವಾಹನ', 'ಟ್ರಾಕ್ಟರ್'].some((keyword) => cmd.includes(keyword))) navigate('/vehicles');
-    else if (['market', 'vendor', 'sell', 'बाजार', 'विक्रेता', 'ಮಾರುಕಟ್ಟೆ', 'ಮಾರಾಟ'].some((keyword) => cmd.includes(keyword))) navigate('/vendors');
-    else if (['analytics', 'data', 'रिपोर्ट', 'डेटा', 'ಡೇಟಾ', 'ವರದಿ'].some((keyword) => cmd.includes(keyword))) navigate('/analytics');
-    else if (['knowledge', 'hub', 'जानकारी', 'सीख', 'ಮಾಹಿತಿ', 'ಜ್ಞಾನ'].some((keyword) => cmd.includes(keyword))) navigate('/knowledge');
-    else if (['assistant', 'help', 'सहायक', 'मदद', 'ಸಹಾಯಕ', 'ಸಹಾಯ'].some((keyword) => cmd.includes(keyword))) navigate('/assistant');
+    const NAV_LINKS = getNavLinks(t, role);
+    const canNav = (path) => NAV_LINKS.some(l => l.to === path);
+
+    if (canNav('/shop') && ['shop', 'store', 'buy', 'दुकान', 'खरीद', 'ಅಂಗಡಿ', 'ಖರೀದಿ'].some((keyword) => cmd.includes(keyword))) navigate('/shop');
+    else if (canNav('/farm-wizard') && ['wizard', 'guide', 'plan', 'योजना', 'सलाह', 'ಮಾರ್ಗದರ್ಶನ', 'ಯೋಜನೆ'].some((keyword) => cmd.includes(keyword))) navigate('/farm-wizard');
+    else if (canNav('/scanner') && ['scanner', 'disease', 'check', 'बीमारी', 'रोग', 'ಸ್ಕ್ಯಾನರ್', 'ರೋಗ'].some((keyword) => cmd.includes(keyword))) navigate('/scanner');
+    else if (canNav('/labour') && ['labour', 'worker', 'मजदूर', 'कामगार', 'ಕಾರ್ಮಿಕ', 'ಕೆಲಸಗಾರ'].some((keyword) => cmd.includes(keyword))) navigate('/labour');
+    else if (canNav('/vehicles') && ['vehicle', 'tractor', 'वाहन', 'ट्रैक्टर', 'ವಾಹನ', 'ಟ್ರಾಕ್ಟರ್'].some((keyword) => cmd.includes(keyword))) navigate('/vehicles');
+    else if (canNav('/vendors') && ['market', 'vendor', 'sell', 'बाजार', 'विक्रेता', 'ಮಾರುಕಟ್ಟೆ', 'ಮಾರಾಟ'].some((keyword) => cmd.includes(keyword))) navigate('/vendors');
+    else if (canNav('/analytics') && ['analytics', 'data', 'रिपोर्ट', 'डेटा', 'ಡೇಟಾ', 'ವರದಿ'].some((keyword) => cmd.includes(keyword))) navigate('/analytics');
+    else if (canNav('/knowledge') && ['knowledge', 'hub', 'जानकारी', 'सीख', 'ಮಾಹಿತಿ', 'ಜ್ಞಾನ'].some((keyword) => cmd.includes(keyword))) navigate('/knowledge');
+    else if (canNav('/assistant') && ['assistant', 'help', 'सहायक', 'मदद', 'ಸಹಾಯಕ', 'ಸಹಾಯ'].some((keyword) => cmd.includes(keyword))) navigate('/assistant');
     else if (cmd.includes('logout') || cmd.includes('sign out') || cmd.includes('लॉगआउट') || cmd.includes('ಲಾಗೌಟ್')) handleLogout();
   };
 

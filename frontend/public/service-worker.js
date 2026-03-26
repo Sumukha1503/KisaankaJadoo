@@ -30,7 +30,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Simple network-first strategy for demonstration
+  const url = new URL(event.request.url);
+  
+  // Skip cross-origin requests (like API calls on port 5001)
+  if (url.origin !== self.location.origin) return;
+
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
+
+  // Skip API calls if they happen to be on same origin
+  if (url.pathname.startsWith('/api/')) return;
+
   event.respondWith(
     fetch(event.request).catch(() => {
       return caches.match(event.request);

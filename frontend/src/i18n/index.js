@@ -304,7 +304,9 @@ const resources = {
       "bid_placed_success": "Bid of ₹{{price}}/kg placed on {{name}}!",
       "bid_placed_mock": "Bid placed on {{name}}! Awaiting farmer confirmation. (Mock)",
       "listed_success": "Crop listed successfully!",
-      "listing_failed": "Listing failed. Try again."
+      "listing_failed": "Listing failed. Try again.",
+      "active_status": "Active & Verified",
+      "live_status": "Live Now"
     }
   },
   hi: {
@@ -607,7 +609,9 @@ const resources = {
       "bid_placed_success": "{{price}}/किलोग्राम की बोली {{name}} पर लगाई गई!",
       "bid_placed_mock": "{{name}} पर बोली लगाई गई! किसान की पुष्टि की प्रतीक्षा है। (मॉक)",
       "listed_success": "फसल सफलतापूर्वक सूचीबद्ध की गई!",
-      "listing_failed": "सूचीबद्ध करना विफल रहा। पुन: प्रयास करें।"
+      "listing_failed": "सूचीबद्ध करना विफल रहा। पुन: प्रयास करें।",
+      "active_status": "सक्रिय और सत्यापित",
+      "live_status": "अभी लाइव है"
     }
   },
   kn: {
@@ -910,7 +914,9 @@ const resources = {
       "bid_placed_success": "{{name}} ಮೇಲೆ ₹{{price}}/ಕೆಜಿ ಬಿಡ್ ಮಾಡಲಾಗಿದೆ!",
       "bid_placed_mock": "{{name}} ಮೇಲೆ ಬಿಡ್ ಮಾಡಲಾಗಿದೆ! ರೈತರ ಅನುಮೋದನೆಗಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ. (ಟೆಸ್ಟ್ ಮೋಡ್)",
       "listed_success": "ಬೆಳೆಯನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಲಿಸ್ಟ್ ಮಾಡಲಾಗಿದೆ!",
-      "listing_failed": "ಲಿಸ್ಟ್ ಮಾಡಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."
+      "listing_failed": "ಲಿಸ್ಟ್ ಮಾಡಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+      "active_status": "ಸಕ್ರಿಯ ಮತ್ತು ದೃಢೀಕೃತ",
+      "live_status": "ಈಗ ಲೈವ್ ಆಗಿದೆ"
     }
   }
 };

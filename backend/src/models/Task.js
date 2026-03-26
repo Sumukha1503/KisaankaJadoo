@@ -7,8 +7,8 @@ const TaskSchema = new mongoose.Schema({
   workersNeeded: { type: Number, default: 1 },
   budget: { type: Number, required: true },
   location: {
-    type: { type: String, default: 'Point' },
-    coordinates: [Number] // [longitude, latitude]
+    type: { type: String, enum: ['Point'], default: 'Point' },
+    coordinates: { type: [Number] } // [longitude, latitude]
   },
   district: { type: String, required: true },
   status: { 

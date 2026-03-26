@@ -41,8 +41,18 @@ export const useVoice = () => {
       console.error('Speech recognition error', event.error);
       setIsListening(false);
       if (onError) onError(event.error);
-      toast.error(`Voice error: ${event.error}`);
+      
+      const errorMessages = {
+        'no-speech': 'No speech was detected. Please try again.',
+        'audio-capture': 'No microphone was found. Ensure it is plugged in.',
+        'not-allowed': 'Microphone permission was denied.',
+        'aborted': 'Speech recognition was aborted.',
+        'network': 'Network error occurred during speech recognition.'
+      };
+      
+      toast.error(errorMessages[event.error] || `Voice error: ${event.error}`);
     };
+
 
     recognition.onend = () => {
       setIsListening(false);
